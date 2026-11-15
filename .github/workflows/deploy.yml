@@ -1,0 +1,20 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  development:
+    uses: ./.github/workflows/terraform-plan.yml
+    with:
+      environment: development
+
+  production:
+    needs: development
+    uses: ./.github/workflows/terraform-plan.yml
+    with:
+      environment: production

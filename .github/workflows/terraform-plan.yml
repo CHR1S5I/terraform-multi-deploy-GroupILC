@@ -1,14 +1,28 @@
-name: Terraform deployment
+name: Terraform plan
 
 on:
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        required: true
 
 permissions:
   contents: read
 
 jobs:
-  deploy:
+  plan:
+    name: Plan (${{ inputs.environment }})
     runs-on: ubuntu-24.04
+    environment: ${{ inputs.environment }}
+    concurrency: terraform-${{ inputs.environment }}
+    env:
+      TF_VAR_project: ${{ vars.PROJECT }}
+      TF_VAR_location: ${{ vars.LOCATION }}
+      TF_VAR_replicas: ${{ vars.REPLICAS }}
+      TF_VAR_enableExternalIP: ${{ vars.EXTERNAL_IP }}
+      # Mock-Credentials, damit der Google-Provider beim Plan nicht meckert
+      GOOGLE_APPLICATION_CREDENTIALS: .github/workflows/mock-credentials.json
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -22,13 +36,8 @@ jobs:
         run: terraform init -input=false
 
       - name: Plan Terraform deployment
-        env:
-          # Reference mock-credentials to make Terraform's Google-Provider not complain about missing
-          # credentials for the plan. They are not required, since tf-apply never runs.
-          GOOGLE_APPLICATION_CREDENTIALS: .github/workflows/mock-credentials.json
-        run: terraform plan -input=false -out=local.tfplan -var-file=configuration/sample.tfvars.json
+        run: terraform plan -input=false -out=local.tfplan
 
-      # Pretty print the changes to the Terraform Outputs directly into the GitHub Workflow Annotations for convenience
       - name: Annotate Terraform output changes
         shell: bash
         run: |
@@ -37,5 +46,5 @@ jobs:
             output_changes="${output_changes//'%'/'%25'}"
             output_changes="${output_changes//$'\r'/'%0D'}"
             output_changes="${output_changes//$'\n'/'%0A'}"
-            printf '::notice title=Terraform output changes::%s\n' "$output_changes"
+            printf '::notice title=Terraform output changes (${{ inputs.environment }})::%s\n' "$output_changes"
           fi
